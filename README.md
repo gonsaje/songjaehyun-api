@@ -382,10 +382,10 @@ It is:
 
 # Status
 
-Phase 1 — Bootstrapped
-Phase 2 — Platform Layer (Sessions + Logging)
-Phase 3 — ExpiringKV Demo
-Phase 4 — Docker + AWS Deployment
-Phase 5 — Frontend Integration
+- Phase 1 — Bootstrapped
+- Phase 2 — Platform Layer (Sessions + Logging)
+- Phase 3 — ExpiringKV Demo
+- Phase 4 — Docker + AWS Deployment
+- Phase 5 — Frontend Integration
 
 ---
