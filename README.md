@@ -6,6 +6,8 @@
 
 ## Overview
 
+![overview diagram](/assets/overview-diagram.webp)
+
 This backend powers the interactive algorithm demos for **songjaehyun.com**.
 
 The goal of this service is not simply to expose endpoints — it is to:
@@ -112,6 +114,9 @@ src/main/java/com/songjaehyun/api
 
 # Layer Breakdown
 
+![layer diagram](/assets/api-layer.webp)
+![layer diagram](/assets/api-layer2.webp)
+
 ## 1. Domain Layer (`demos/<demo>/domain`)
 
 Contains pure Java implementations.
@@ -190,6 +195,8 @@ Used for:
 ---
 
 # Logging Model
+
+![layer diagram](/assets/sequence.webp)
 
 Each API call generates a structured `LogEvent`:
 
