@@ -17,7 +17,6 @@ public class SessionRegistry {
         lastSeen.remove(sessionId);
     }
 
-
     public Map<String, Long> snapshot() {
         return Map.copyOf(lastSeen);
     }
