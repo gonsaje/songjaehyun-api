@@ -33,6 +33,9 @@ public final class ExpiringKeyValueStore {
      * @param ttlMillis TTL in ms (must be >= 0)
      */
     public void put(String key, String value, long ttlMillis) {
+        requireKey(key);
+        requireValue(value);
+
         long now = nowMillis.getAsLong();
         long expiry = now + ttlMillis;
 
@@ -57,6 +60,8 @@ public final class ExpiringKeyValueStore {
      * @return
      */
     public String get(String key) {
+        requireKey(key);
+
         long now = nowMillis.getAsLong();
 
         lock.lock();
@@ -78,6 +83,8 @@ public final class ExpiringKeyValueStore {
     }
 
     public boolean remove(String key) {
+        requireKey(key);
+
         long now = nowMillis.getAsLong();
 
         lock.lock();
@@ -102,6 +109,8 @@ public final class ExpiringKeyValueStore {
     }
 
     public long getRemainingTTL(String key) {
+        requireKey(key);
+
         long now = nowMillis.getAsLong();
 
         lock.lock();
@@ -121,6 +130,9 @@ public final class ExpiringKeyValueStore {
     }
 
     public void putIfAbsent(String key, String value, long ttl) {
+        requireKey(key);
+        requireValue(value);
+
         long now = nowMillis.getAsLong();
 
         lock.lock();
@@ -152,9 +164,19 @@ public final class ExpiringKeyValueStore {
         }
     }
 
+    private static void requireKey(String key) {
+        if (key == null || key.isBlank())
+            throw new IllegalArgumentException("Key must not be null or blank");
+    }
+
+    private static void requireValue(String value) {
+        if (value == null)
+            throw new IllegalArgumentException("Value must not be null");
+    }
+
     private record CacheEntry(String value, long expiry) {
         boolean isExpiredAt(long now) {
-            return now >= this.expiry;
+            return now >= expiry;
         }
     }
 
