@@ -5,11 +5,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.LongSupplier;
 
 public final class ExpiringKeyValueStore {
 
     private final LongSupplier nowMillis;
+    private final ReentrantLock lock = new ReentrantLock();
 
     private final Map<String, CacheEntry> store = new HashMap<>();
     private final PriorityQueue<ExpiryNode> pq = new PriorityQueue<>(Comparator.comparingLong(en -> en.expiry));
@@ -33,13 +35,18 @@ public final class ExpiringKeyValueStore {
     public void put(String key, String value, long ttlMillis) {
         long now = nowMillis.getAsLong();
         long expiry = now + ttlMillis;
-        CacheEntry entry = new CacheEntry(value, expiry);
-        store.put(key, entry);
 
-        ExpiryNode expn = new ExpiryNode(key, expiry);
-        pq.offer(expn);
+        lock.lock();
+        try {
+            purgeExpired(now);
 
-        purgeExpired(now);
+            ExpiryNode expn = new ExpiryNode(key, expiry);
+            CacheEntry entry = new CacheEntry(value, expiry);
+            store.put(key, entry);
+            pq.offer(expn);
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -50,53 +57,92 @@ public final class ExpiringKeyValueStore {
      * @return
      */
     public String get(String key) {
-        CacheEntry entry = store.get(key);
         long now = nowMillis.getAsLong();
-        if (entry == null)
-            return null;
-        if (entry.isExpiredAt(now)) {
-            store.remove(key);
-            return null;
+
+        lock.lock();
+        try {
+            purgeExpired(now);
+
+            CacheEntry entry = store.get(key);
+            if (entry == null)
+                return null;
+            if (entry.isExpiredAt(now)) {
+                store.remove(key);
+
+                return null;
+            }
+            return entry.getValue();
+        } finally {
+            lock.unlock();
         }
-        return entry.getValue();
     }
 
     public boolean remove(String key) {
-        return store.remove(key) != null;
+        long now = nowMillis.getAsLong();
+
+        lock.lock();
+        try {
+            purgeExpired(now);
+            return store.remove(key) != null;
+        } finally {
+            lock.unlock();
+        }
     }
 
     public int size() {
         long now = nowMillis.getAsLong();
-        purgeExpired(now);
-        return this.store.size();
+
+        lock.lock();
+        try {
+            purgeExpired(now);
+            return this.store.size();
+        } finally {
+            lock.unlock();
+        }
     }
 
     public long getRemainingTTL(String key) {
-        CacheEntry entry = store.get(key);
         long now = nowMillis.getAsLong();
-        if (entry == null || entry.isExpiredAt(now))
-            return -1;
-        long remainingTime = entry.getExpiry() - now;
-        return remainingTime;
+
+        lock.lock();
+        try {
+            purgeExpired(now);
+
+            CacheEntry entry = store.get(key);
+
+            if (entry == null || entry.isExpiredAt(now))
+                return -1;
+
+            long remainingTime = entry.getExpiry() - now;
+            return remainingTime;
+        } finally {
+            lock.unlock();
+        }
     }
 
     public void putIfAbsent(String key, String value, long ttl) {
         long now = nowMillis.getAsLong();
-        if (get(key) == null) {
-            long expiry = now + ttl;
-            CacheEntry newEntry = new CacheEntry(value, expiry);
-            store.put(key, newEntry);
-            ExpiryNode newExpiry = new ExpiryNode(key, expiry);
-            pq.offer(newExpiry);
+
+        lock.lock();
+        try {
+            purgeExpired(now);
+            if (store.get(key) == null) {
+                long expiry = now + ttl;
+                CacheEntry newEntry = new CacheEntry(value, expiry);
+                store.put(key, newEntry);
+                ExpiryNode newExpiry = new ExpiryNode(key, expiry);
+                pq.offer(newExpiry);
+            }
+        } finally {
+            lock.unlock();
         }
-        purgeExpired(now);
     }
 
-    public void purgeExpired(long now) {
+    private void purgeExpired(long now) {
         while (!this.pq.isEmpty() && this.pq.peek().expiry <= now) {
             ExpiryNode en = pq.poll();
-
             CacheEntry ce = this.store.get(en.key);
+
             if (ce == null)
                 continue;
             if (ce.getExpiry() != en.expiry)
