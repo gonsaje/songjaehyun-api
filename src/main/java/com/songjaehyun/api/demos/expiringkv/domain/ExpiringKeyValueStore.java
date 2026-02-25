@@ -71,7 +71,7 @@ public final class ExpiringKeyValueStore {
 
                 return null;
             }
-            return entry.getValue();
+            return entry.value;
         } finally {
             lock.unlock();
         }
@@ -113,7 +113,7 @@ public final class ExpiringKeyValueStore {
             if (entry == null || entry.isExpiredAt(now))
                 return -1;
 
-            long remainingTime = entry.getExpiry() - now;
+            long remainingTime = entry.expiry - now;
             return remainingTime;
         } finally {
             lock.unlock();
@@ -145,43 +145,19 @@ public final class ExpiringKeyValueStore {
 
             if (ce == null)
                 continue;
-            if (ce.getExpiry() != en.expiry)
+            if (ce.expiry != en.expiry)
                 continue;
 
             store.remove(en.key);
         }
     }
 
-    private static final class CacheEntry {
-        private final String value;
-        private final long expiry;
-
-        CacheEntry(String value, long expiry) {
-            this.value = value;
-            this.expiry = expiry;
-        }
-
-        String getValue() {
-            return this.value;
-        }
-
-        long getExpiry() {
-            return this.expiry;
-        }
-
+    private record CacheEntry(String value, long expiry) {
         boolean isExpiredAt(long now) {
             return now >= this.expiry;
         }
     }
 
-    private static final class ExpiryNode {
-        private final String key;
-        private final long expiry;
-
-        ExpiryNode(String key, long expiry) {
-            this.key = key;
-            this.expiry = expiry;
-        }
-
+    private record ExpiryNode(String key, long expiry) {
     }
 }
