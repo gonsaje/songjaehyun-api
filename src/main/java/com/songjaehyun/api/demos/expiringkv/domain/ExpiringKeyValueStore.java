@@ -16,6 +16,8 @@ public final class ExpiringKeyValueStore {
     private final Map<String, CacheEntry> store = new HashMap<>();
     private final PriorityQueue<ExpiryNode> pq = new PriorityQueue<>(Comparator.comparingLong(en -> en.expiry));
 
+    private static final long MAX_TTL_MILLIS = 365L * 24 * 60 * 60 * 1000; // 1 year
+
     public ExpiringKeyValueStore() {
         this(System::currentTimeMillis);
     }
@@ -36,8 +38,9 @@ public final class ExpiringKeyValueStore {
         requireKey(key);
         requireValue(value);
 
+        long ttl = validateTtl(ttlMillis);
         long now = nowMillis.getAsLong();
-        long expiry = now + ttlMillis;
+        long expiry = now + ttl;
 
         lock.lock();
         try {
@@ -133,13 +136,14 @@ public final class ExpiringKeyValueStore {
         requireKey(key);
         requireValue(value);
 
+        long validatedTtl = validateTtl(ttl);
         long now = nowMillis.getAsLong();
 
         lock.lock();
         try {
             purgeExpired(now);
             if (store.get(key) == null) {
-                long expiry = now + ttl;
+                long expiry = now + validatedTtl;
                 CacheEntry newEntry = new CacheEntry(value, expiry);
                 store.put(key, newEntry);
                 ExpiryNode newExpiry = new ExpiryNode(key, expiry);
@@ -162,6 +166,18 @@ public final class ExpiringKeyValueStore {
 
             store.remove(en.key);
         }
+    }
+
+    private static long validateTtl(long ttl) {
+        if (ttl <= 0) {
+            throw new IllegalArgumentException("TTL must be > 0.");
+        }
+
+        if (ttl > MAX_TTL_MILLIS) {
+            throw new IllegalArgumentException("TTL exceeds maximum of 1 year.");
+        }
+
+        return ttl;
     }
 
     private static void requireKey(String key) {
