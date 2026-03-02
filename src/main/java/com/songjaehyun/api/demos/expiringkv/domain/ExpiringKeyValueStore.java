@@ -8,6 +8,19 @@ import java.util.PriorityQueue;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.LongSupplier;
 
+/**
+ * Thread-safe in-memory expiring key-value store.
+ *
+ * <p>
+ * Design:
+ * - Backed by a HashMap for O(1) average lookup.
+ * - Expirations tracked via a min-heap ordered by expiry time.
+ * - Lazy expiration: expired entries are removed during read/write operations.
+ * - TTL is capped at 1 year to prevent overflow and unbounded retention.
+ * - Time source is injected via LongSupplier for testability.
+ *
+ * <p>
+ */
 public final class ExpiringKeyValueStore {
 
     private final LongSupplier nowMillis;
@@ -29,10 +42,11 @@ public final class ExpiringKeyValueStore {
     /**
      * Put a key/value with TTL (relative expiration).
      * Overwrites existing key and resets TTL.
+     * Validates key, value, and expiry inputs.
      * 
      * @param key       the key to the store
      * @param value     the associated value
-     * @param ttlMillis TTL in ms (must be >= 0)
+     * @param ttlMillis time-to-live in milliseconds; must be > 0 and <= 1 year
      */
     public void put(String key, String value, long ttlMillis) {
         requireKey(key);
@@ -111,6 +125,14 @@ public final class ExpiringKeyValueStore {
         }
     }
 
+    /**
+     * Returns the remaining TTL in milliseconds for the given key.
+     *
+     * @param key the key
+     * @return remaining TTL in milliseconds, or -1 if the key does not exist
+     *         or has expired
+     * @throws IllegalArgumentException if the key is null or blank
+     */
     public long getRemainingTTL(String key) {
         requireKey(key);
 
@@ -132,6 +154,16 @@ public final class ExpiringKeyValueStore {
         }
     }
 
+    /**
+     * Inserts the key/value pair only if the key is absent (or expired).
+     * Does not overwrite or reset TTL if the key already exists and is active.
+     *
+     * @param key   the key
+     * @param value the value
+     * @param ttl   time-to-live in milliseconds; must be > 0 and <= 1 year
+     * @throws IllegalArgumentException if key/value is invalid or TTL is out of
+     *                                  range
+     */
     public void putIfAbsent(String key, String value, long ttl) {
         requireKey(key);
         requireValue(value);
@@ -168,6 +200,13 @@ public final class ExpiringKeyValueStore {
         }
     }
 
+    /**
+     * Validates TTL against domain constraints.
+     * Enforces TTL > 0 and <= 1 year.
+     * 
+     * @param ttl
+     * @return
+     */
     private static long validateTtl(long ttl) {
         if (ttl <= 0) {
             throw new IllegalArgumentException("TTL must be > 0.");
