@@ -190,6 +190,13 @@ public final class ExpiringKeyValueStore {
         }
     }
 
+    /**
+     * Immutable snapshot for frontend
+     * Entries sorted by key
+     * Includes remaining TTL
+     * 
+     * @return Returns immutable snapshot of active entries.
+     */
     public Snapshot snapshot() {
         long now = nowMillis.getAsLong();
         lock.lock();
@@ -268,6 +275,9 @@ public final class ExpiringKeyValueStore {
     // ----------------------------
 
     public record Snapshot(long nowMillis, List<SnapshotEntry> entries) {
+        public Snapshot {
+            entries = Objects.requireNonNull(entries, "entires");
+        }
     }
 
     public record SnapshotEntry(
