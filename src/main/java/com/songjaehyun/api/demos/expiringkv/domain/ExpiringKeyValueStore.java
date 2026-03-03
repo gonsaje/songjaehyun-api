@@ -1,7 +1,10 @@
 package com.songjaehyun.api.demos.expiringkv.domain;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
@@ -27,7 +30,8 @@ public final class ExpiringKeyValueStore {
     private final ReentrantLock lock = new ReentrantLock();
 
     private final Map<String, CacheEntry> store = new HashMap<>();
-    private final PriorityQueue<ExpiryNode> pq = new PriorityQueue<>(Comparator.comparingLong(en -> en.expiry));
+    private final PriorityQueue<ExpiryNode> expiryMinHeap = new PriorityQueue<>(
+            Comparator.comparingLong(en -> en.expiry));
 
     private static final long MAX_TTL_MILLIS = 365L * 24 * 60 * 60 * 1000; // 1 year
 
@@ -63,7 +67,7 @@ public final class ExpiringKeyValueStore {
             ExpiryNode expn = new ExpiryNode(key, expiry);
             CacheEntry entry = new CacheEntry(value, expiry);
             store.put(key, entry);
-            pq.offer(expn);
+            expiryMinHeap.offer(expn);
         } finally {
             lock.unlock();
         }
@@ -179,16 +183,37 @@ public final class ExpiringKeyValueStore {
                 CacheEntry newEntry = new CacheEntry(value, expiry);
                 store.put(key, newEntry);
                 ExpiryNode newExpiry = new ExpiryNode(key, expiry);
-                pq.offer(newExpiry);
+                expiryMinHeap.offer(newExpiry);
             }
         } finally {
             lock.unlock();
         }
     }
 
+    public Snapshot snapshot() {
+        long now = nowMillis.getAsLong();
+        lock.lock();
+        try {
+            purgeExpired(now);
+
+            List<SnapshotEntry> entries = new ArrayList<>(store.size());
+            for (Map.Entry<String, CacheEntry> entry : store.entrySet()) {
+                String key = entry.getKey();
+                CacheEntry ce = entry.getValue();
+                long remaining = Math.max(0L, ce.expiry - now);
+                entries.add(new SnapshotEntry(key, ce.value, ce.expiry, remaining));
+            }
+            entries.sort((a, b) -> a.key().compareTo(b.key()));
+
+            return new Snapshot(now, Collections.unmodifiableList(entries));
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private void purgeExpired(long now) {
-        while (!this.pq.isEmpty() && this.pq.peek().expiry <= now) {
-            ExpiryNode en = pq.poll();
+        while (!this.expiryMinHeap.isEmpty() && this.expiryMinHeap.peek().expiry <= now) {
+            ExpiryNode en = expiryMinHeap.poll();
             CacheEntry ce = this.store.get(en.key);
 
             if (ce == null)
@@ -236,5 +261,19 @@ public final class ExpiringKeyValueStore {
     }
 
     private record ExpiryNode(String key, long expiry) {
+    }
+
+    // ----------------------------
+    // Snapshot DTOs (domain-level)
+    // ----------------------------
+
+    public record Snapshot(long nowMillis, List<SnapshotEntry> entries) {
+    }
+
+    public record SnapshotEntry(
+            String key,
+            String value,
+            long expiryMillis,
+            long ttlRemainingMillis) {
     }
 }
