@@ -1,5 +1,6 @@
 package com.songjaehyun.api.demos.expiringkv.application;
 
+import java.util.Objects;
 import java.util.function.LongSupplier;
 
 import com.songjaehyun.api.demos.expiringkv.domain.ExpiringKeyValueStore;
@@ -15,6 +16,10 @@ public final class ExpiringKeyValueService {
 
     public ExpiringKeyValueService(LongSupplier nowMillis) {
         this.store = new ExpiringKeyValueStore(nowMillis);
+    }
+
+    public ExpiringKeyValueService(ExpiringKeyValueStore store) {
+        this.store = Objects.requireNonNull(store);
     }
 
     public void put(String key, String value, long ttlMillis) {
