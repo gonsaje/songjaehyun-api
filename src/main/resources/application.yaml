@@ -1,3 +1,19 @@
 spring:
   application:
     name: api
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+
+server:
+  address: 0.0.0.0
+  port: 8080
